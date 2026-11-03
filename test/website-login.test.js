@@ -48,8 +48,8 @@ function fixture(options = {}) {
     return { configured: true, accountRevision: revision }
   }
   const login = websiteLogin({ endpoint: 'https://aiyting.com/api/mcp', identity, commit,
-    signal: controller.signal, fetcher, now: () => time })
-  return { login, calls, commits, controller, enqueue,
+    signal: controller.signal, fetcher, now: () => time, requestTimeoutMs: options.requestTimeoutMs })
+  return { login, calls, commits, controller, enqueue, device,
     begin: () => login.begin(revision), advance: (ms = 5000) => { time += ms },
     saved: () => saved, setRevision: (next) => { revision = next },
   }
@@ -267,6 +267,7 @@ test('Host disposal during grant creation cancels a late grant without publishin
   f.controller.abort(); f.login.dispose()
   response.resolve({ device_code: DEVICE })
   await assert.rejects(beginning, /连接已关闭/)
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(f.calls.map((call) => call.path), ['device', 'cancel'])
   assert.equal(f.calls.at(-1).signal.aborted, false)
   assert.equal(await f.login.status(), null)
@@ -348,4 +349,91 @@ test('logout reset waits for an irreversible commit then reports only that commi
   assert.equal(await f.login.status(), null)
   assert.equal(f.calls.some(call => call.path === 'cancel'), false, 'a committed credential must not be remotely revoked by reset')
   assert.equal(f.login.canResetFrom('account-before'), false)
+})
+
+test('a transport that ignores abort cannot keep grant creation or its queue pending forever', { timeout: 1000 }, async () => {
+  const f = fixture({ requestTimeoutMs: 25, deviceResponse: () => new Promise(() => {}) })
+  await assert.rejects(f.begin(), /请求超时/)
+  assert.equal(f.calls[0].signal.aborted, true)
+  assert.equal(f.saved(), 'working-old-key')
+  assert.equal(f.commits.length, 0)
+  assert.equal(await f.login.status(), null)
+  f.enqueue('device', f.device)
+  const retried = await f.begin()
+  assert.equal(retried.phase, 'pending', 'a timed out request must release the serial queue for retry')
+  assertPublic(retried)
+  await f.login.cancel(retried.attemptId)
+})
+
+test('a response body that never ends has the same bounded deadline and permits retry', { timeout: 1000 }, async () => {
+  let body
+  const stream = new ReadableStream({ start(controller) {
+    body = controller
+    controller.enqueue(new TextEncoder().encode('{"device_code":"fixture-late-stream-grant-12345678901234567890"}'))
+  } })
+  const f = fixture({ requestTimeoutMs: 25, deviceResponse: new Response(stream) })
+  try {
+    await assert.rejects(f.begin(), /请求超时/)
+    assert.equal(f.calls[0].signal.aborted, true)
+    assert.equal(await f.login.status(), null)
+    f.enqueue('device', f.device)
+    const next = await f.begin()
+    assert.equal(next.phase, 'pending')
+    assert.equal(f.saved(), 'working-old-key')
+    assert.equal(f.commits.length, 0)
+    await f.login.cancel(next.attemptId)
+  } finally { body.close() }
+})
+
+test('Host disposal settles a grant whose transport never observes its abort signal', { timeout: 1000 }, async () => {
+  const entered = deferred()
+  const f = fixture({ requestTimeoutMs: 10000, deviceResponse: () => { entered.resolve(); return new Promise(() => {}) } })
+  const beginning = f.begin()
+  await entered.promise
+  f.controller.abort(); f.login.dispose()
+  await assert.rejects(beginning, /取消|关闭/)
+  assert.equal(f.calls[0].signal.aborted, true)
+  assert.equal(await f.login.status(), null)
+  assert.equal(f.saved(), 'working-old-key')
+  assert.equal(f.commits.length, 0)
+})
+
+test('an unavailable website authorization endpoint explains manual connection without leaking its body', async () => {
+  const f = fixture({ deviceResponse: new Response('server-secret-error: not deployed', { status: 404 }) })
+  const error = await f.begin().catch(value => value)
+  assert.match(error.message, /尚未开放/)
+  assert.match(error.message, /接入密钥/)
+  assertPublic({ message: error.message })
+  assert.equal(await f.login.status(), null)
+  assert.equal(f.saved(), 'working-old-key')
+  assert.equal(f.commits.length, 0)
+})
+
+test('a token transport timeout preserves the working account and leaves cancellation and retry usable', { timeout: 1000 }, async () => {
+  const f = fixture({ requestTimeoutMs: 25 }), started = await f.begin()
+  f.enqueue('token', () => new Promise(() => {})); f.advance()
+  const pending = await f.login.status(started.attemptId)
+  assert.equal(pending.phase, 'pending')
+  assert.match(pending.message, /网络/)
+  assert.equal(f.saved(), 'working-old-key')
+  assert.equal(f.commits.length, 0)
+  assert.equal((await f.login.cancel(started.attemptId)).phase, 'cancelled')
+  f.enqueue('device', { ...f.device, device_code: DEVICE + '-retry' })
+  const retried = await f.begin()
+  assert.equal(retried.phase, 'pending')
+  assert.notEqual(retried.attemptId, started.attemptId)
+  assertPublic(retried)
+  await f.login.cancel(retried.attemptId)
+})
+
+test('explicit cancellation settles a token transport that ignores abort before its long deadline', { timeout: 1000 }, async () => {
+  const f = fixture({ requestTimeoutMs: 10000 }), started = await f.begin(), entered = deferred()
+  f.enqueue('token', () => { entered.resolve(); return new Promise(() => {}) }); f.advance()
+  const polling = f.login.status(started.attemptId)
+  await entered.promise
+  const cancelling = f.login.cancel(started.attemptId)
+  assert.equal((await polling).phase, 'cancelled')
+  assert.equal((await cancelling).phase, 'cancelled')
+  assert.equal(f.saved(), 'working-old-key')
+  assert.equal(f.commits.length, 0)
 })

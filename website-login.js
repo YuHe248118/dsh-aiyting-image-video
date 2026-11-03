@@ -4,7 +4,7 @@ const ACTIVE = new Set(['pending', 'connecting', 'committing'])
 const failure = (message) => new Error('AIyting ' + message)
 
 /** Device grant secrets live only in this Host closure, never in public views. */
-export function websiteLogin({ endpoint, identity, commit, signal, fetcher = fetch, now = Date.now }) {
+export function websiteLogin({ endpoint, identity, commit, signal, fetcher = fetch, now = Date.now, requestTimeoutMs = 15000 }) {
   const origin = new URL(endpoint).origin
   let attempt = null, queue = Promise.resolve(), epoch = 0
   const serial = (job) => {
@@ -17,18 +17,42 @@ export function websiteLogin({ endpoint, identity, commit, signal, fetcher = fet
     return serial(() => job(started))
   }
   const post = async (path, body, extraSignal, cleanup = false) => {
-    const response = await fetcher(new URL('/api/auth/plugin/' + path, origin), {
-      method: 'POST', redirect: 'error', credentials: 'omit',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.any([...(cleanup ? [] : [signal]), ...(extraSignal ? [extraSignal] : []), AbortSignal.timeout(cleanup ? 3000 : 15000)]),
+    const timeout = new AbortController()
+    const combined = AbortSignal.any([...(cleanup ? [] : [signal]), ...(extraSignal ? [extraSignal] : []), timeout.signal])
+    let timedOut = false, timer, onAbort
+    const cancelled = new Promise((_, reject) => {
+      onAbort = () => reject(failure(timedOut ? '官网登录请求超时，请重试或使用接入密钥连接。' : '登录请求已取消或连接已关闭。'))
+      if (combined.aborted) onAbort()
+      else combined.addEventListener('abort', onAbort, { once: true })
     })
-    const text = await response.text()
-    if (text.length > 16384) throw failure('登录服务返回异常，请稍后重试。')
-    let data
-    try { data = JSON.parse(text) } catch { throw failure('官网授权暂不可用，请使用高级设置中的接入密钥。') }
-    if (!response.ok && typeof data.error !== 'string') throw failure('官网授权暂不可用，请使用高级设置中的接入密钥。')
-    return data
+    timer = setTimeout(() => { timedOut = true; timeout.abort() }, cleanup ? Math.min(3000, requestTimeoutMs) : requestTimeoutMs)
+    const exchange = async () => {
+      combined.throwIfAborted()
+      const response = await fetcher(new URL('/api/auth/plugin/' + path, origin), {
+        method: 'POST', redirect: 'error', credentials: 'omit',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+        signal: combined,
+      })
+      if (response.status === 404 || response.status === 405) {
+        void response.body?.cancel().catch(() => {})
+        throw failure('官网一键授权尚未开放，请使用接入密钥连接。')
+      }
+      const text = await response.text()
+      if (text.length > 16384) throw failure('登录服务返回异常，请稍后重试。')
+      let data
+      try { data = JSON.parse(text) } catch { throw failure('官网授权暂不可用，请使用高级设置中的接入密钥。') }
+      if (!response.ok && typeof data.error !== 'string') throw failure('官网授权暂不可用，请使用高级设置中的接入密钥。')
+      // A transport may deliver a grant after the local deadline already settled.
+      // Clean up that unapproved grant without allowing it to become a new attempt.
+      if (combined.aborted && path === 'device' && typeof data.device_code === 'string' && /^[A-Za-z0-9_-]{24,256}$/.test(data.device_code)) {
+        void post('cancel', { device_code: data.device_code }, undefined, true).catch(() => {})
+      }
+      combined.throwIfAborted()
+      return data
+    }
+    try { return await Promise.race([exchange(), cancelled]) }
+    finally { clearTimeout(timer); combined.removeEventListener('abort', onAbort) }
   }
   const view = (a = attempt) => a ? {
     attemptId: a.id, phase: a.phase, verificationUri: a.uri, userCode: a.code,

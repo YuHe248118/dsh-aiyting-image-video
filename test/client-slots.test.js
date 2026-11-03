@@ -166,7 +166,7 @@ test('current complete client registers the named sidebar and additive composer 
   assert.deepEqual(Array.from(core.entriesOfSlot('conversation.input.right'), (entry) => entry.options.id), ['aiyting-image-settings'])
   assert.equal(core.entriesOfSlot('main').length, 1)
   assert.equal(core.entriesOfSlot('sidebar.panellist').length, 1)
-  assert.equal(core.entriesOfSlot('sidebar.panellist')[0].options.label, 'aiyting生图/生视频')
+  assert.equal(core.entriesOfSlot('sidebar.panellist')[0].options.label, 'AIyting生图/生视频')
   aiyting.dispose()
   assert.equal(core.entriesOfSlot('conversation.input.activity')[0].component, voiceComponent)
 })

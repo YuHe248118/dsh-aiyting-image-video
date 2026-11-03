@@ -1,6 +1,6 @@
 {
   "name": "@aiyting/dsh-image-video",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "AIyting sidebar account page, persistent conversation image settings, live MCP quotes and a crash-safe image generation ledger",
   "license": "UNLICENSED",
