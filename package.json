@@ -1,0 +1,60 @@
+{
+  "name": "@local/aiyting-ui",
+  "version": "0.3.1",
+  "private": true,
+  "description": "AIyting sidebar account page, persistent conversation image settings, live MCP quotes and a crash-safe image generation ledger",
+  "license": "UNLICENSED",
+  "author": "AIyting",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YuHe248118/dsh-aiyting-ui.git"
+  },
+  "homepage": "https://github.com/YuHe248118/dsh-aiyting-ui#readme",
+  "bugs": {
+    "url": "https://github.com/YuHe248118/dsh-aiyting-ui/issues"
+  },
+  "keywords": ["dsh-plugin", "deepseek-harness", "aiyting", "image-generation", "mcp"],
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "host.js",
+    "preferences.js",
+    "batches.js",
+    "generation.js",
+    "account.js",
+    "website-login.js",
+    "settings-tool.js",
+    "catalog.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check index.js && node --check host.js && node --check website-login.js && node --check batches.js && node --check generation.js && node --check preferences.js && node --check account.js && node --check settings-tool.js && node --check catalog.js && node --check client.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}

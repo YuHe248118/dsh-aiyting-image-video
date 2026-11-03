@@ -1,0 +1,11 @@
+.local/
+node_modules/
+*.tgz
+.env
+.env.*
+.DS_Store
+Thumbs.db
+dist/
+coverage/
+*.log
+.credentials*
