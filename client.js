@@ -4,7 +4,7 @@
  * The Host supplies the live MCP catalog and quotes. Credentials stay on the Host.
  */
 window.__ModuleLoader__.load({
-  id: '@local/aiyting-ui',
+  id: '@aiyting/dsh-image-video',
   factory(require) {
     const React = require('react')
     const h = React.createElement

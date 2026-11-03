@@ -1,8 +1,8 @@
-# AIyting 生图插件 · DeepSeek Harness
+# AIyting 生图/生视频 · DeepSeek Harness
 
 在 DeepSeek Harness 中查询 AIyting 模型与点数报价、设置生图参数、生成图片和找回未完成任务。插件界面显示名为 **aiyting生图/生视频**；本版开放生图，生视频仍在第二阶段计划中。
 
-v0.3.1 为初始预览版本，已在 DSH **0.2.1-rc.5** 验证。其他 DSH 版本的兼容性尚未确认。
+当前预览版本为 v0.3.2，已在 DSH **0.2.1-rc.5** 验证。其他 DSH 版本的兼容性尚未确认。
 
 > 官网确认后自动连接的插件代码已完成，网站配套服务尚未上线。本版请使用“账号与连接 → 高级设置”中的接入密钥方式。网站服务上线前，点击官网登录可能提示暂不可用。
 
@@ -11,7 +11,7 @@ v0.3.1 为初始预览版本，已在 DSH **0.2.1-rc.5** 验证。其他 DSH 版
 桌面版：在 DSH 的“插件管理”页点击“添加插件”，选择安装第三方插件，填写：
 
 ```text
-github:YuHe248118/dsh-aiyting-ui#v0.3.1
+github:YuHe248118/dsh-aiyting-image-video#v0.3.2
 ```
 
 按页面提示检查并安装。若 DSH 提示需要重启，先保存当前工作，再使用应用正常退出流程。
@@ -19,7 +19,7 @@ github:YuHe248118/dsh-aiyting-ui#v0.3.1
 使用 CLI 管理普通 `web` profile 时，可执行：
 
 ```sh
-dsh plugin --profile web add "github:YuHe248118/dsh-aiyting-ui#v0.3.1"
+dsh plugin --profile web add "github:YuHe248118/dsh-aiyting-image-video#v0.3.2"
 ```
 
 `web` 可替换为自己使用的普通 profile。桌面版保留的 `desktop` profile 由桌面应用管理，请使用上面的插件管理页；直接调用普通 CLI 或其 JavaScript 入口会拒绝管理该 profile。
@@ -62,10 +62,10 @@ dsh plugin --profile web add "github:YuHe248118/dsh-aiyting-ui#v0.3.1"
 普通 `web` profile 的 CLI 卸载示例：
 
 ```sh
-dsh plugin --profile web remove "@local/aiyting-ui"
+dsh plugin --profile web remove "@aiyting/dsh-image-video"
 ```
 
-`@local/aiyting-ui` 是本版保留的内部包名。卸载插件和清除官网授权是独立操作；如需撤销服务访问，请同时在官网管理密钥。
+本版包名为 `@aiyting/dsh-image-video`。此前若装过 `@local/aiyting-ui`，请先卸载旧包，再安装本版，避免出现两个入口。卸载插件和清除官网授权是独立操作；如需撤销服务访问，请同时在官网管理密钥。
 
 ## 开发与验证
 
@@ -76,7 +76,7 @@ npm run check
 npm test
 ```
 
-v0.3.1 在具备 DSH 安装运行时的本地环境完成 **71/71 测试，0 跳过**。安装版集成测试会使用真实 DSH 的槽位与 MCP 客户端，对接本地模拟服务，不读取用户密钥，也不提交付费生成。
+v0.3.2 在具备 DSH 安装运行时的本地环境完成 **71/71 测试，0 跳过**。安装版集成测试会使用真实 DSH 的槽位与 MCP 客户端，对接本地模拟服务，不读取用户密钥，也不提交付费生成。
 
 没有安装 DSH 的环境会明确跳过相应集成测试，其余测试可独立运行。可通过 `DSH_RUNTIME_DIR` 指向已有 DSH runtime 目录来启用集成检查；本版测试使用 Node.js 22。
 
